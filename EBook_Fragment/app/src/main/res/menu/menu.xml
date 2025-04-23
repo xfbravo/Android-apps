@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item
+        android:id="@+id/menu_font_size"
+        android:title="字体大小" />
+    <item
+        android:id="@+id/menu_switch_mode"
+        android:title="模式切换" />
+    <item
+        android:id="@+id/menu_choose_chapter"
+        android:title="选择章节" />
+    <item
+        android:id="@+id/menu_toggle_reading_mode"
+        android:title="切换阅读模式" />
+</menu>

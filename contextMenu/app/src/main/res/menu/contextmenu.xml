@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item
+        android:id="@+id/delete"
+        android:title="删除此联系人" />
+    <item
+        android:id="@+id/edit"
+        android:title="编辑此联系人信息" />
+    <item
+        android:id="@+id/sendMessage"
+        android:title="发送消息给联系人" />
+</menu>
