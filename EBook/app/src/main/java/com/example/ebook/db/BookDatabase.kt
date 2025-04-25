@@ -22,11 +22,11 @@ abstract class BookDatabase :RoomDatabase() {
             return INSTANCE?:synchronized(this) {
                 INSTANCE?:Room.databaseBuilder(
                     context.applicationContext,
-                    BookDatabase::class.java
+                    BookDatabase::class.java,
                     "book_database.db"
                 ).build().also{
                     INSTANCE = it
-                }}
+                }
             }
         }
     }

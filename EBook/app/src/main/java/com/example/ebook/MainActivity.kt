@@ -1,5 +1,8 @@
 package com.example.ebook
 
+import nl.siegmann.epublib.epub.EpubReader
+import nl.siegmann.epublib.domain.Book as EpubBook
+import java.io.InputStream
 import Book
 import android.content.Intent
 import android.os.Bundle
@@ -31,17 +34,72 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.sp
+import android.content.Context
+import androidx.lifecycle.lifecycleScope
+import com.example.ebook.db.BookDatabase
+import com.example.ebook.entity.BookContentEntity
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
+    private val bookId="sherlock_holmes".hashCode()
+    private lateinit var chapters:List<BookContentEntity>
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        lifecycleScope.launch {
+            val db= BookDatabase.getInstance(this@MainActivity)
+            chapters=db.bookContentDao().getAllChapters(bookId)
+        }
         enableEdgeToEdge()
         setContent {
             EBookTheme {
-                Library()
+//                Library()
+                showEpubBook(chapters)
             }
         }
+//        val bookId="sherlock_holmes".hashCode()
+//        lifecycleScope.launch {
+//            val inputStream=this@MainActivity.assets.open("sherlock_holmes.epub")
+//            importEpubIntoDatabase(this@MainActivity,bookId,inputStream)
+//        }
     }
+}
+
+@Composable
+fun showEpubBook(chapters:List<BookContentEntity>){
+    LazyColumn {
+        items(chapters.size){index ->
+            val chapter = chapters[index]
+            Text(
+                text="Chapter ${index+1}: ${chapter.title}",
+                fontSize = 20.sp,
+                modifier = Modifier.padding(8.dp)
+            )
+            Text(
+                text=chapter.content,
+                fontSize = 16.sp,
+                modifier = Modifier.padding(8.dp),
+            )
+        }
+    }
+}
+
+suspend fun importEpubIntoDatabase(context:Context,bookId:Int,epubInputStream: InputStream){
+    val db = BookDatabase.getInstance(context)
+    val dao=db.bookContentDao()
+    val epubBook: EpubBook = EpubReader().readEpub(epubInputStream)
+    val toc = epubBook.tableOfContents.tocReferences
+
+    val entities=toc.mapIndexed{index,ref ->
+        val content= ref.resource.data.toString(Charsets.UTF_8)
+        BookContentEntity(
+            bookId=bookId,
+            chapterIndex = index,
+            title = ref.title?:"第4{index+1}章",
+            content = content
+        )
+    }
+//    dao.deleteByBook(bookId)
+    dao.insertAll(entities)
 }
 
 @Composable

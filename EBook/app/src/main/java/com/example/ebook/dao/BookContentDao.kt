@@ -8,7 +8,7 @@ import com.example.ebook.entity.BookContentEntity
 @Dao
 interface BookContentDao{
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertBookContent(bookContent: List<BookContentEntity>)
+    suspend fun insertAll(bookContent: List<BookContentEntity>)
 
     @Query("SELECT * FROM book_content WHERE bookId = :bookId ORDER BY chapterIndex ASC")
     suspend fun getAllChapters(bookId: Int): List<BookContentEntity>

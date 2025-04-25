@@ -42,6 +42,12 @@ android {
 }
 
 dependencies {
+
+    // https://mvnrepository.com/artifact/nl.siegmann.epublib/epublib-core
+//    implementation("nl.siegmann.epublib:epublib-core:3.1")
+// https://mvnrepository.com/artifact/org.slf4j/slf4j-api
+    implementation("org.slf4j:slf4j-api:2.0.17")
+    implementation(files("libs/epublib-core-3.1.jar"))
     val room_version = "2.6.0"
     implementation("androidx.room:room-runtime:$room_version")
     annotationProcessor ("androidx.room:room-compiler:$room_version")
