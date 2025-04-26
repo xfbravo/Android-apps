@@ -67,6 +67,7 @@ class BookActivity : ComponentActivity() {
     }
     override fun onDestroy() {
         super.onDestroy()
+        //TODO 保存阅读进度
         val bookId= bookViewModel.currentBookId.value
         val currentChapter= bookViewModel.currentChapterIndex.value
         val currentScrollOffset= bookViewModel.currentScrollOffset.value
@@ -82,20 +83,22 @@ fun BookTextReader(bookId:Int,viewModel: BookViewModel,toggleFullScreen: () -> U
     val context=LocalContext.current
     val dao=remember{BookDatabase.getInstance(context).bookContentDao()}
     val scope= rememberCoroutineScope()
-
+    //TODO记录章节索引和内容
     val chapterIndices=remember { mutableStateListOf<Int>() }
     val chapterContentMap= remember { mutableStateMapOf<Int, String>() }
     val listState=rememberLazyListState()
-
+    //TODO记录阅读位置
     val initialChapter= viewModel.initialChapterIndex.value
     val initialScrollOffset= viewModel.initialScrollOffset.value
+    //TODO 记录字体大小和夜间模式
     val fontSize= viewModel.fontSize.observeAsState(20f)
     val isNightMode= viewModel.isNightMode.observeAsState(false)
     val backgroundColor= if (isNightMode.value == true) Color.Black else Color.White
     val textColor= if (isNightMode.value == true) Color.White else Color.Black
-
+    //TODO 记录是否恢复上次阅读位置
     var restored by remember { mutableStateOf(false) }
 
+    //TODO 预加载章节内容
     LaunchedEffect(Unit) {
         val range = (initialChapter - 1)..(initialChapter + 1)
         range.forEach { index ->
@@ -108,29 +111,37 @@ fun BookTextReader(bookId:Int,viewModel: BookViewModel,toggleFullScreen: () -> U
         }
         chapterIndices.sort()
     }
-    // 恢复上次阅读位置
+    //TODO 恢复上次阅读位置
     LaunchedEffect(chapterIndices.size) {
         if (!restored && chapterIndices.isNotEmpty()) {
             val targetIndex = chapterIndices.indexOf(initialChapter)
             if (targetIndex >= 0) {
-                delay(300)
                 listState.scrollToItem(targetIndex, initialScrollOffset)
                 restored = true
             }
         }
     }
+
+    //TODO 章节跳转
     val jumpChapter by viewModel.jumpChapter.observeAsState(null)
     LaunchedEffect(jumpChapter) {
-        jumpChapter?.let{index->
-            if(!chapterIndices.contains(index)){
-                dao.getChapterContent(bookId,index)?.let{
-                    chapterIndices.add(index)
-                    chapterContentMap[index]=it.content
-                    chapterIndices.sort()
+        jumpChapter?.let { targetChapter ->
+            val range = (targetChapter - 1)..(targetChapter + 1)
+            range.forEach { index ->
+                if (index >= 0 && !chapterIndices.contains(index)) {
+                    dao.getChapterContent(bookId, index)?.let { chapter ->
+                        chapterIndices.add(index)
+                        chapterContentMap[index] = chapter.content
+                    }
                 }
             }
-            delay(50)
-            listState.scrollToItem(chapterIndices.indexOf(index))
+            chapterIndices.sort()
+
+            delay(50) // 等待布局更新
+            val targetIndex = chapterIndices.indexOf(targetChapter)
+            if (targetIndex >= 0) {
+                listState.scrollToItem(targetIndex)
+            }
             viewModel.requestJumpToChapter(null)
         }
     }
@@ -154,13 +165,13 @@ fun BookTextReader(bookId:Int,viewModel: BookViewModel,toggleFullScreen: () -> U
         itemsIndexed (chapterIndices){index,chapterIndex ->
             val content=chapterContentMap[chapterIndex]?:"加载中..."
 
-            Text(
+            Text(//TODO 显示章节内容
                 text = content,
                 fontSize= fontSize.value.sp,
                 modifier = Modifier.padding(15.dp),
                 color = textColor,
             )
-
+            //TODO 预加载下一章
             if(index==chapterIndices.lastIndex){
                 LaunchedEffect(index) {
                     val nextIndex=chapterIndex+1
@@ -173,6 +184,7 @@ fun BookTextReader(bookId:Int,viewModel: BookViewModel,toggleFullScreen: () -> U
                     }
                 }
             }
+            //TODO 预加载上一章
             if(index==0){
                 LaunchedEffect(index) {
                     val previousIndex=chapterIndex-1
