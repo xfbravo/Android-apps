@@ -5,6 +5,13 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import com.example.ebook.entity.BookContentEntity
+
+//TODO 查询所有章节标题用到的数据类
+data class ChapterInfo(
+    val chapterIndex: Int,
+    val title: String
+)
+
 @Dao
 interface BookContentDao{
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -21,4 +28,7 @@ interface BookContentDao{
 
     @Query("DELETE FROM book_content WHERE bookId = :bookId")
     suspend fun deleteByBook(bookId: Int)
+
+    @Query("SELECT chapterIndex,title FROM book_content WHERE bookId = :bookId ORDER BY chapterIndex ASC")
+    suspend fun getAllChapterTitles(bookId: Int): List<ChapterInfo>
 }

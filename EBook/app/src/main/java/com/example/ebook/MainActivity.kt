@@ -35,70 +35,66 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.sp
 import android.content.Context
-import androidx.lifecycle.lifecycleScope
 import com.example.ebook.db.BookDatabase
 import com.example.ebook.entity.BookContentEntity
-import kotlinx.coroutines.launch
+import androidx.core.text.HtmlCompat
 
 class MainActivity : ComponentActivity() {
-    private val bookId="sherlock_holmes".hashCode()
     private lateinit var chapters:List<BookContentEntity>
+    private lateinit var db: BookDatabase
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        lifecycleScope.launch {
-            val db= BookDatabase.getInstance(this@MainActivity)
-            chapters=db.bookContentDao().getAllChapters(bookId)
-        }
+//        this.deleteDatabase("book_database.db")//TODO 删除数据库
+
+//        val bookTitles=listOf<String>("sherlock_holmes","球状闪电","乡村教师")
+//        bookTitles.forEach {bookTitle->
+//            lifecycleScope.launch {
+//                val inputStream=this@MainActivity.assets.open("${bookTitle}.epub")
+//                importEpubIntoDatabase(this@MainActivity,bookTitle.hashCode(),inputStream)
+//            }
+//        }
         enableEdgeToEdge()
         setContent {
             EBookTheme {
-//                Library()
-                showEpubBook(chapters)
+                Library()
             }
         }
-//        val bookId="sherlock_holmes".hashCode()
-//        lifecycleScope.launch {
-//            val inputStream=this@MainActivity.assets.open("sherlock_holmes.epub")
-//            importEpubIntoDatabase(this@MainActivity,bookId,inputStream)
-//        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        db.close()
     }
 }
 
-@Composable
-fun showEpubBook(chapters:List<BookContentEntity>){
-    LazyColumn {
-        items(chapters.size){index ->
-            val chapter = chapters[index]
-            Text(
-                text="Chapter ${index+1}: ${chapter.title}",
-                fontSize = 20.sp,
-                modifier = Modifier.padding(8.dp)
-            )
-            Text(
-                text=chapter.content,
-                fontSize = 16.sp,
-                modifier = Modifier.padding(8.dp),
-            )
-        }
-    }
-}
 
-suspend fun importEpubIntoDatabase(context:Context,bookId:Int,epubInputStream: InputStream){
+suspend fun importEpubIntoDatabase(context: Context, bookId: Int, epubInputStream: InputStream) {
     val db = BookDatabase.getInstance(context)
-    val dao=db.bookContentDao()
+    val dao = db.bookContentDao()
+
     val epubBook: EpubBook = EpubReader().readEpub(epubInputStream)
     val toc = epubBook.tableOfContents.tocReferences
 
-    val entities=toc.mapIndexed{index,ref ->
-        val content= ref.resource.data.toString(Charsets.UTF_8)
-        BookContentEntity(
-            bookId=bookId,
-            chapterIndex = index,
-            title = ref.title?:"第4{index+1}章",
-            content = content
-        )
+    val entities = toc.mapIndexedNotNull { index, tocRef ->
+        try {
+            val rawHtml = String(tocRef.resource.data, Charsets.UTF_8)
+            val plainText = HtmlCompat.fromHtml(rawHtml, HtmlCompat.FROM_HTML_MODE_LEGACY).toString()
+                .replace(Regex("\\n{2,}"), "\n\n")  // 规范段落间距
+                .trim()
+
+            BookContentEntity(
+                bookId = bookId,
+                chapterIndex = index,
+                title = tocRef.title ?: "第${index + 1}章",
+                content = plainText
+            )
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null // 忽略异常章节
+        }
     }
-//    dao.deleteByBook(bookId)
+
+    dao.deleteByBook(bookId)  // 清除之前已有的同一本书的章节
     dao.insertAll(entities)
 }
 
@@ -106,10 +102,9 @@ suspend fun importEpubIntoDatabase(context:Context,bookId:Int,epubInputStream: I
 fun Library() {
     val context= LocalContext.current
     val books=listOf(//TODO 书籍列表
-        Book("What if", R.drawable.what_if, R.raw.book1),
-        Book("Loving Hot Family", R.drawable.lovinghotfamily_bookcover, R.raw.lovinghotfamily),
-        Book("球状闪电", R.drawable.lightning_ball, R.raw.lightning_ball),
-        Book("乡村教师", R.drawable.country_teacher, R.raw.country_teacher),
+        Book("球状闪电", R.drawable.lightning_ball),
+        Book("乡村教师", R.drawable.country_teacher),
+        Book("sherlock_holmes", R.drawable.sherlock_homes),
     )
 
     Column {
@@ -123,7 +118,6 @@ fun Library() {
             val newBook = Book(//TODO 传递书籍信息
                 title = book.title,
                 coverResId = book.coverResId,
-                rawResId = book.rawResId
             )
             intent.putExtra("book", newBook)
             context.startActivity(intent)

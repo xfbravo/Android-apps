@@ -15,26 +15,35 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
+import com.example.ebook.db.BookDatabase
+import kotlinx.coroutines.launch
 
 
 @Composable
-fun hideOrShowFloatingActionButton(viewModel: BookViewModel,fullScreen: Boolean){
+fun HideOrShowFloatingActionButton(viewModel: BookViewModel,fullScreen: Boolean){
     if(!fullScreen){
-        useFloatingActionButton(viewModel)
+        UseFloatingActionButton(viewModel)
     }
 }
 
 //TODO 显示右下角菜单按钮
 @Composable
-fun useFloatingActionButton(viewModel: BookViewModel) {
+fun UseFloatingActionButton(viewModel: BookViewModel) {
     var menuExpanded by remember { mutableStateOf(false) }
     var sizeMenuExpanded by remember { mutableStateOf(false) }
+    var chapterMenuExpanded by remember { mutableStateOf(true) }
+    var chapterTitles by remember { mutableStateOf<List<Pair<Int,String>>>(emptyList()) }
 
+    val context= LocalContext.current
+    val scope= rememberCoroutineScope()
+    val db= remember { BookDatabase.getInstance(context) }
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.BottomEnd
@@ -49,7 +58,7 @@ fun useFloatingActionButton(viewModel: BookViewModel) {
             ) {
                 Icon(Icons.Default.MoreVert, contentDescription = "Menu")
             }
-
+            //主菜单
             DropdownMenu(
                 expanded = menuExpanded,
                 onDismissRequest = { menuExpanded = false },
@@ -78,8 +87,13 @@ fun useFloatingActionButton(viewModel: BookViewModel) {
                 DropdownMenuItem(
                     text = { Text("切换章节") },
                     onClick = {
-                        menuExpanded = false
-                        // TODO()
+                        chapterMenuExpanded=true
+                        scope.launch {
+                            val dao=db.bookContentDao()
+                            val bookId=viewModel.currentBookId.value?:return@launch
+                            val infos=dao.getAllChapterTitles(bookId)
+                            chapterTitles=infos.map{it.chapterIndex to it.title}//转化成Pair
+                        }
                     }
                 )
                 DropdownMenuItem(
@@ -124,6 +138,25 @@ fun useFloatingActionButton(viewModel: BookViewModel) {
                         menuExpanded = false
                     }
                 )
+            }
+            DropdownMenu(
+                expanded = chapterMenuExpanded,
+                onDismissRequest = {
+                    sizeMenuExpanded = false
+                    menuExpanded = false
+                },
+                offset = DpOffset(-(165).dp, (-100).dp)  // 明显下移
+            ){
+                chapterTitles.forEach { (index,title)->
+                    DropdownMenuItem(
+                        text={Text(title)},
+                        onClick = {
+                            viewModel.requestJumpToChapter(index)
+                            chapterMenuExpanded = false
+                            menuExpanded = false
+                        }
+                    )
+                }
             }
         }
     }
