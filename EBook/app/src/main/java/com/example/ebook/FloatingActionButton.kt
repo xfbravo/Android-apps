@@ -1,16 +1,20 @@
 package com.example.ebook
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -22,9 +26,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
+import com.example.ebook.dao.ChapterInfo
 import com.example.ebook.db.BookDatabase
 import kotlinx.coroutines.launch
-
+import androidx.compose.foundation.lazy.items
 
 @Composable
 fun HideOrShowFloatingActionButton(viewModel: BookViewModel,fullScreen: Boolean){
@@ -38,8 +43,8 @@ fun HideOrShowFloatingActionButton(viewModel: BookViewModel,fullScreen: Boolean)
 fun UseFloatingActionButton(viewModel: BookViewModel) {
     var menuExpanded by remember { mutableStateOf(false) }
     var sizeMenuExpanded by remember { mutableStateOf(false) }
-    var chapterMenuExpanded by remember { mutableStateOf(true) }
-    var chapterTitles by remember { mutableStateOf<List<Pair<Int,String>>>(emptyList()) }
+    var chapterDialogVisible by remember { mutableStateOf(false) }
+    var chapterInfos by remember { mutableStateOf<List<ChapterInfo>>(emptyList()) }
 
     val context= LocalContext.current
     val scope= rememberCoroutineScope()
@@ -87,12 +92,11 @@ fun UseFloatingActionButton(viewModel: BookViewModel) {
                 DropdownMenuItem(
                     text = { Text("切换章节") },
                     onClick = {
-                        chapterMenuExpanded=true
                         scope.launch {
                             val dao=db.bookContentDao()
                             val bookId=viewModel.currentBookId.value?:return@launch
-                            val infos=dao.getAllChapterTitles(bookId)
-                            chapterTitles=infos.map{it.chapterIndex to it.title}//转化成Pair
+                            chapterInfos=dao.getAllChapterTitles(bookId)
+                            chapterDialogVisible= true
                         }
                     }
                 )
@@ -104,7 +108,7 @@ fun UseFloatingActionButton(viewModel: BookViewModel) {
                     }
                 )
             }
-
+            //设置字体大小的菜单
             // 第二个菜单锚定在第一个按钮的下面，通过 offset 控制位置
             DropdownMenu(
                 expanded = sizeMenuExpanded,
@@ -139,25 +143,35 @@ fun UseFloatingActionButton(viewModel: BookViewModel) {
                     }
                 )
             }
-            DropdownMenu(
-                expanded = chapterMenuExpanded,
-                onDismissRequest = {
-                    sizeMenuExpanded = false
-                    menuExpanded = false
-                },
-                offset = DpOffset(-(165).dp, (-100).dp)  // 明显下移
-            ){
-                chapterTitles.forEach { (index,title)->
-                    DropdownMenuItem(
-                        text={Text(title)},
-                        onClick = {
-                            viewModel.requestJumpToChapter(index)
-                            chapterMenuExpanded = false
-                            menuExpanded = false
+        }
+        //章节选择对话框
+        if (chapterDialogVisible) {
+            AlertDialog(
+                onDismissRequest = { chapterDialogVisible = false },
+                title = { Text("选择章节") },
+                text = {
+                    LazyColumn {
+                        items(chapterInfos) { info ->
+                            Text(
+                                text = info.title,
+                                modifier = Modifier
+                                    .padding(8.dp)
+                                    .clickable {
+                                        viewModel.requestJumpToChapter(info.chapterIndex)
+                                        chapterDialogVisible = false
+                                        menuExpanded = false
+                                    }
+                            )
                         }
-                    )
+                    }
+                },
+                confirmButton = {},
+                dismissButton = {
+                    TextButton(onClick = { chapterDialogVisible = false }) {
+                        Text("取消")
+                    }
                 }
-            }
+            )
         }
     }
 }

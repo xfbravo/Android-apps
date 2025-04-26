@@ -2,6 +2,7 @@ package com.example.ebook
 
 import Book
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -29,6 +30,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.graphics.Color
 import com.example.ebook.db.BookDatabase
 import kotlinx.coroutines.delay
@@ -43,11 +45,19 @@ class BookActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val book= intent.getParcelableExtra<Book>("book")//TODO 获取书籍信息
+        book?.let {
+            bookViewModel.setCurrentBookId(it.title.hashCode())
+        }
+        val progress= ReadingProgressManager.getProgress(this,book?.title.hashCode())
+        val initialChapter= progress?.first ?: 0
+        val initialOffset= progress?.second ?: 0
+        bookViewModel.setInitialChapterIndex(initialChapter)
+        bookViewModel.setInitialScrollOffset(initialOffset)
         enableEdgeToEdge()
         setContent {
             EBookTheme {
                 if(!fullScreen){showCustomToast(this,"${book?.title}")}
-                BookTextReader(book?.title.hashCode(),0,bookViewModel,toggleFullScreen = {
+                BookTextReader(book?.title.hashCode(),bookViewModel,toggleFullScreen = {
                     fullScreen=!fullScreen
                     switchFullScreenMode(this,fullScreen, book?.title)//TODO 进入全屏模式
                 })//TODO 显示书籍信息
@@ -55,9 +65,20 @@ class BookActivity : ComponentActivity() {
             }
         }
     }
+    override fun onDestroy() {
+        super.onDestroy()
+        val bookId= bookViewModel.currentBookId.value
+        val currentChapter= bookViewModel.currentChapterIndex.value
+        val currentScrollOffset= bookViewModel.currentScrollOffset.value
+
+        if (currentChapter != null && bookId != null&& currentScrollOffset != null) {
+            ReadingProgressManager.saveProgress(this, bookId, currentChapter, currentScrollOffset)
+        }
+        Log.d("BookActivityLife", "onDestroy: $currentChapter")
+    }
 }
 @Composable
-fun BookTextReader(bookId:Int,startChapter:Int = 1,viewModel: BookViewModel,toggleFullScreen: () -> Unit){
+fun BookTextReader(bookId:Int,viewModel: BookViewModel,toggleFullScreen: () -> Unit){
     val context=LocalContext.current
     val dao=remember{BookDatabase.getInstance(context).bookContentDao()}
     val scope= rememberCoroutineScope()
@@ -65,22 +86,63 @@ fun BookTextReader(bookId:Int,startChapter:Int = 1,viewModel: BookViewModel,togg
     val chapterIndices=remember { mutableStateListOf<Int>() }
     val chapterContentMap= remember { mutableStateMapOf<Int, String>() }
     val listState=rememberLazyListState()
+
+    val initialChapter= viewModel.initialChapterIndex.value
+    val initialScrollOffset= viewModel.initialScrollOffset.value
     val fontSize= viewModel.fontSize.observeAsState(20f)
     val isNightMode= viewModel.isNightMode.observeAsState(false)
     val backgroundColor= if (isNightMode.value == true) Color.Black else Color.White
     val textColor= if (isNightMode.value == true) Color.White else Color.Black
 
+    var restored by remember { mutableStateOf(false) }
+
     LaunchedEffect(Unit) {
-        val range=(startChapter-1)..(startChapter+1)
+        val range = (initialChapter - 1)..(initialChapter + 1)
         range.forEach { index ->
-            if(index>=0&&!chapterIndices.contains(index)){
-                dao.getChapterContent(bookId,index)?.let{chapter->
+            if (index >= 0) {
+                dao.getChapterContent(bookId, index)?.let { chapter ->
                     chapterIndices.add(index)
-                    chapterContentMap[index]=chapter.content
+                    chapterContentMap[index] = chapter.content
                 }
             }
         }
         chapterIndices.sort()
+    }
+    // 恢复上次阅读位置
+    LaunchedEffect(chapterIndices.size) {
+        if (!restored && chapterIndices.isNotEmpty()) {
+            val targetIndex = chapterIndices.indexOf(initialChapter)
+            if (targetIndex >= 0) {
+                delay(300)
+                listState.scrollToItem(targetIndex, initialScrollOffset)
+                restored = true
+            }
+        }
+    }
+    val jumpChapter by viewModel.jumpChapter.observeAsState(null)
+    LaunchedEffect(jumpChapter) {
+        jumpChapter?.let{index->
+            if(!chapterIndices.contains(index)){
+                dao.getChapterContent(bookId,index)?.let{
+                    chapterIndices.add(index)
+                    chapterContentMap[index]=it.content
+                    chapterIndices.sort()
+                }
+            }
+            delay(50)
+            listState.scrollToItem(chapterIndices.indexOf(index))
+            viewModel.requestJumpToChapter(null)
+        }
+    }
+    //TODO 实时记录滚动位置，通过flow来实现，一直收集index和offset，并且更新viewModel中的值
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
+            .collect { (index, offset) ->
+                chapterIndices.getOrNull(index)?.let { chapter ->
+                    viewModel.updateCurrentChapterIndex(chapter)
+                    viewModel.updateScrollOffset(offset)
+                }
+            }
     }
     LazyColumn (
         state=listState,
@@ -127,21 +189,7 @@ fun BookTextReader(bookId:Int,startChapter:Int = 1,viewModel: BookViewModel,togg
                     }
                 }
             }
-            val jumpChapter by viewModel.jumpChapter.observeAsState(null)
-            LaunchedEffect(jumpChapter) {
-                jumpChapter?.let{index->
-                    if(!chapterIndices.contains(index)){
-                        dao.getChapterContent(bookId,index)?.let{
-                            chapterIndices.add(index)
-                            chapterContentMap[index]=it.content
-                            chapterIndices.sort()
-                        }
-                    }
-                    delay(50)
-                    listState.scrollToItem(chapterIndices.indexOf(index))
-                    viewModel.requestJumpToChapter(null)
-                }
-            }
+
         }
     }
 }
