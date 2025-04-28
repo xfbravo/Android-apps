@@ -32,6 +32,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.graphics.Color
+import com.example.ebook.Menu.HideOrShowFloatingActionButton
 import com.example.ebook.db.BookDatabase
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -61,7 +62,7 @@ class BookActivity : ComponentActivity() {
                     fullScreen=!fullScreen
                     switchFullScreenMode(this,fullScreen, book?.title)//TODO 进入全屏模式
                 })//TODO 显示书籍信息
-                HideOrShowFloatingActionButton(bookViewModel,fullScreen)//TODO 显示右下角菜单按钮
+                HideOrShowFloatingActionButton(bookViewModel, fullScreen)//TODO 显示右下角菜单按钮
             }
         }
     }
